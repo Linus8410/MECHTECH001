@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Define the solid color of the button (optional) -->
+
+
+    <!-- Stroke settings -->
+    <stroke android:color="@color/white"
+        android:width="2dp" />
+
+    <!-- Adjust the corners to have minimal rounding (e.g., 4dp for slight rounding) -->
+    <corners android:radius="4dp" />
+
+    <!-- Optional padding within the button -->
+    <padding
+        android:left="8dp"
+        android:top="8dp"
+        android:right="8dp"
+        android:bottom="8dp" />
+</shape>

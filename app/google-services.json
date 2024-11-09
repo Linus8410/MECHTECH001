@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "799362871620",
+    "project_id": "otp-verification-d5079",
+    "storage_bucket": "otp-verification-d5079.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:799362871620:android:16feef7d821e726a71a711",
+        "android_client_info": {
+          "package_name": "com.example.mechtech001"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAz95mwty5j99t5Sp9yCTVNY00e41mRBOw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
