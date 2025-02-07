@@ -109,6 +109,30 @@
                 android:textStyle="bold"
                 tools:ignore="Label For"
                 android:importantForAutofill="no"/>
+            <EditText
+                android:layout_width="40dp"
+                android:layout_height="45dp"
+                android:id="@+id/inputcode5"
+                android:imeOptions="actionNext"
+                android:textSize="24sp"
+                android:inputType="number"
+                android:maxLength="1"
+                android:gravity="center"
+                android:textStyle="bold"
+                tools:ignore="Label For"
+                android:importantForAutofill="no"/>
+            <EditText
+                android:layout_width="40dp"
+                android:layout_height="45dp"
+                android:id="@+id/inputcode6"
+                android:imeOptions="actionNext"
+                android:textSize="24sp"
+                android:inputType="number"
+                android:maxLength="1"
+                android:gravity="center"
+                android:textStyle="bold"
+                tools:ignore="Label For"
+                android:importantForAutofill="no"/>
 
 
         </LinearLayout>

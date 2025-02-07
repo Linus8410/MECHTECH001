@@ -1,3 +1,4 @@
+// SendOTPActivity.java
 package com.example.mechtech001;
 
 import androidx.annotation.NonNull;
@@ -20,66 +21,66 @@ import java.util.concurrent.TimeUnit;
 
 public class SendOTPActivity extends AppCompatActivity {
 
+    private EditText inputMobile;
+    private Button buttonGetOTP;
+    private ProgressBar progressBar;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_send_otpactivity);
-        final EditText inputMobile=findViewById(R.id.inputmobile);
-        Button buttonGetOTP= findViewById(R.id.getotp);
-        TextView txtregister=findViewById(R.id.existingaccount);
-        final ProgressBar progressBar=findViewById(R.id.progressBar);
 
-        txtregister.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startActivity(new Intent(SendOTPActivity.this, MainActivity.class));
-                finish();
-            }
+        inputMobile = findViewById(R.id.inputmobile);
+        buttonGetOTP = findViewById(R.id.getotp);
+        TextView txtRegister = findViewById(R.id.existingaccount);
+        progressBar = findViewById(R.id.progressBar);
+
+        txtRegister.setOnClickListener(v -> {
+            startActivity(new Intent(SendOTPActivity.this, MainActivity.class));
+            finish();
         });
 
-        buttonGetOTP.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if(inputMobile.getText().toString().trim().isEmpty()){
-                    Toast.makeText(SendOTPActivity.this, "Enter Mobile", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                progressBar.setVisibility(View.VISIBLE);
-                buttonGetOTP.setVisibility(View.INVISIBLE);
-                PhoneAuthProvider.getInstance().verifyPhoneNumber(
-                        "+254" +inputMobile.getText().toString(),
-                        60,
-                        TimeUnit.SECONDS,
-                        SendOTPActivity.this,
-                        new PhoneAuthProvider.OnVerificationStateChangedCallbacks(){
-                            @Override
-                            public void onVerificationCompleted(@NonNull PhoneAuthCredential phoneAuthCredential) {
-                                progressBar.setVisibility(view.GONE);
-                                buttonGetOTP.setVisibility(View.VISIBLE);
-
-                            }
-
-                            @Override
-                            public void onVerificationFailed(@NonNull FirebaseException e) {
-                                progressBar.setVisibility(view.GONE);
-                                buttonGetOTP.setVisibility(View.VISIBLE);
-                                Toast.makeText(SendOTPActivity.this,e.getMessage(),Toast.LENGTH_SHORT).show();
-
-                            }
-
-                            @Override
-                            public void onCodeSent(@NonNull String verificationId, @NonNull PhoneAuthProvider.ForceResendingToken forceResendingToken) {
-                                progressBar.setVisibility(View.GONE);
-                                buttonGetOTP.setVisibility(View.VISIBLE);
-                                Intent intent=new Intent(getApplicationContext(), VerifyOTPActivity.class);
-                                intent.putExtra("mobile",inputMobile.getText().toString());
-                                intent.putExtra("verificationId",verificationId);
-                                startActivity(intent);
-                            }
-                        }
-                );
-
+        buttonGetOTP.setOnClickListener(view -> {
+            String mobileNumber = inputMobile.getText().toString().trim();
+            if (mobileNumber.isEmpty()) {
+                Toast.makeText(SendOTPActivity.this, "Enter Mobile Number", Toast.LENGTH_SHORT).show();
+                return;
             }
+
+            progressBar.setVisibility(View.VISIBLE);
+            buttonGetOTP.setVisibility(View.INVISIBLE);
+
+            PhoneAuthProvider.getInstance().verifyPhoneNumber(
+                    "+254" + mobileNumber,
+                    60,
+                    TimeUnit.SECONDS,
+                    SendOTPActivity.this,
+                    new PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                        @Override
+                        public void onVerificationCompleted(@NonNull PhoneAuthCredential phoneAuthCredential) {
+                            progressBar.setVisibility(View.GONE);
+                            buttonGetOTP.setVisibility(View.VISIBLE);
+                        }
+
+                        @Override
+                        public void onVerificationFailed(@NonNull FirebaseException e) {
+                            progressBar.setVisibility(View.GONE);
+                            buttonGetOTP.setVisibility(View.VISIBLE);
+                            Toast.makeText(SendOTPActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+
+                        @Override
+                        public void onCodeSent(@NonNull String verificationId, @NonNull PhoneAuthProvider.ForceResendingToken forceResendingToken) {
+                            progressBar.setVisibility(View.GONE);
+                            buttonGetOTP.setVisibility(View.VISIBLE);
+
+                            Intent intent = new Intent(getApplicationContext(), VerifyOTPActivity.class);
+                            intent.putExtra("mobile", mobileNumber);
+                            intent.putExtra("verificationId", verificationId);
+                            startActivity(intent);
+                        }
+                    }
+            );
         });
     }
 }

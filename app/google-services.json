@@ -2,7 +2,7 @@
   "project_info": {
     "project_number": "799362871620",
     "project_id": "otp-verification-d5079",
-    "storage_bucket": "otp-verification-d5079.appspot.com"
+    "storage_bucket": "otp-verification-d5079.firebasestorage.app"
   },
   "client": [
     {

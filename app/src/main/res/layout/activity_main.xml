@@ -108,7 +108,7 @@
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/loginclient"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="150dp"
+                android:layout_width="130dp"
                 android:layout_height="48dp"
                 android:layout_marginEnd="8dp"
                 android:text="Client"
@@ -122,7 +122,7 @@
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/loginmech"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="150dp"
+                android:layout_width="130dp"
                 android:layout_height="48dp"
                 android:layout_marginStart="8dp"
                 android:text="Mechanic"
