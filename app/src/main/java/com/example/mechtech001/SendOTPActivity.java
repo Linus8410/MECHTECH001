@@ -41,7 +41,8 @@ public class SendOTPActivity extends AppCompatActivity {
         });
 
         buttonGetOTP.setOnClickListener(view -> {
-            String mobileNumber = inputMobile.getText().toString().trim();
+            final String mobileNumber = inputMobile.getText().toString().trim(); // Final variable
+
             if (mobileNumber.isEmpty()) {
                 Toast.makeText(SendOTPActivity.this, "Enter Mobile Number", Toast.LENGTH_SHORT).show();
                 return;
@@ -75,12 +76,13 @@ public class SendOTPActivity extends AppCompatActivity {
                             buttonGetOTP.setVisibility(View.VISIBLE);
 
                             Intent intent = new Intent(getApplicationContext(), VerifyOTPActivity.class);
-                            intent.putExtra("mobile", mobileNumber);
+                            intent.putExtra("mobile", mobileNumber); // Now works!
                             intent.putExtra("verificationId", verificationId);
                             startActivity(intent);
                         }
                     }
             );
         });
+
     }
 }

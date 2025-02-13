@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -50,6 +51,13 @@ public class VerifyOTPActivity extends AppCompatActivity {
 
         verificationId = getIntent().getStringExtra("verificationId");
 
+        if (verificationId == null) {
+            Toast.makeText(this, "Error: Verification ID is missing!", Toast.LENGTH_LONG).show();
+            Log.e("OTP_Debug", "❌ verificationId is NULL!");
+            finish();
+            return;
+        }
+
         buttonVerify.setOnClickListener(v -> {
             String code = inputCode1.getText().toString().trim()
                     + inputCode2.getText().toString().trim()
@@ -58,54 +66,79 @@ public class VerifyOTPActivity extends AppCompatActivity {
                     + inputCode5.getText().toString().trim()
                     + inputCode6.getText().toString().trim();
 
-            if (code.length() < 6) {
+            Log.d("OTP_Debug", "Entered OTP: " + code);
+
+            if (code.length() != 6) {
                 Toast.makeText(VerifyOTPActivity.this, "Please enter a valid 6-digit OTP", Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            if (verificationId != null) {
-                progressBar.setVisibility(View.VISIBLE);
-                buttonVerify.setVisibility(View.INVISIBLE);
+            progressBar.setVisibility(View.VISIBLE);
+            buttonVerify.setVisibility(View.INVISIBLE);
 
-                PhoneAuthCredential phoneAuthCredential = PhoneAuthProvider.getCredential(verificationId, code);
-                FirebaseAuth.getInstance().signInWithCredential(phoneAuthCredential)
-                        .addOnCompleteListener(task -> {
-                            progressBar.setVisibility(View.GONE);
-                            buttonVerify.setVisibility(View.VISIBLE);
-                            if (task.isSuccessful()) {
-                                Intent intent = new Intent(getApplicationContext(), MainActivity.class);
+            PhoneAuthCredential phoneAuthCredential = PhoneAuthProvider.getCredential(verificationId, code);
+            FirebaseAuth.getInstance().signInWithCredential(phoneAuthCredential)
+                    .addOnCompleteListener(task -> {
+                        progressBar.setVisibility(View.GONE);
+                        buttonVerify.setVisibility(View.VISIBLE);
+
+                        if (task.isSuccessful()) {
+                            Log.d("OTP_Debug", "OTP Verification Successful!");
+                            if (FirebaseAuth.getInstance().getCurrentUser() != null) {
+                                Log.d("OTP_Debug", "Firebase User: " + FirebaseAuth.getInstance().getCurrentUser().getPhoneNumber());
+                            }
+                            runOnUiThread(() -> {
+                                Intent intent = new Intent(getApplicationContext(), SetPassword.class);
+                                intent.putExtra("mobile", getIntent().getStringExtra("mobile")); // Ensure phone number is passed
                                 intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                                 startActivity(intent);
-                            } else {
-                                Toast.makeText(VerifyOTPActivity.this, "Invalid Code!", Toast.LENGTH_SHORT).show();
-                            }
-                        });
-            }
-        });
+                                finish();
 
+                            });
+                        } else {
+                            Log.e("OTP_Debug", "OTP Verification Failed: " + task.getException().getMessage());
+                            Toast.makeText(VerifyOTPActivity.this, "❌ Invalid OTP. Try Again!", Toast.LENGTH_SHORT).show();
+                        }
+                    })
+                    .addOnFailureListener(e -> {
+                        progressBar.setVisibility(View.GONE);
+                        buttonVerify.setVisibility(View.VISIBLE);
+                        Log.e("OTP_Debug", "🔥 Firebase Auth Error: " + e.getMessage());
+                        Toast.makeText(VerifyOTPActivity.this, "🔥 Auth Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    });
+        });
         findViewById(R.id.resendOTP).setOnClickListener(v -> resendOTP());
     }
 
     private void resendOTP() {
+        String mobileNumber = getIntent().getStringExtra("mobile");
+        if (mobileNumber == null || mobileNumber.isEmpty()) {
+            Toast.makeText(this, "Error: Mobile number is missing", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         PhoneAuthProvider.getInstance().verifyPhoneNumber(
-                "+254" + getIntent().getStringExtra("mobile"),
+                "+254" + mobileNumber,
                 60,
                 TimeUnit.SECONDS,
                 VerifyOTPActivity.this,
                 new PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
                     @Override
                     public void onVerificationCompleted(@NonNull PhoneAuthCredential phoneAuthCredential) {
+                        Log.d("OTP_Debug", "✔ Auto Verification Completed!");
                     }
 
                     @Override
                     public void onVerificationFailed(@NonNull FirebaseException e) {
                         Toast.makeText(VerifyOTPActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Log.e("OTP_Debug", "❌ Verification Failed: " + e.getMessage());
                     }
 
                     @Override
                     public void onCodeSent(@NonNull String newVerificationId, @NonNull PhoneAuthProvider.ForceResendingToken forceResendingToken) {
                         verificationId = newVerificationId;
-                        Toast.makeText(VerifyOTPActivity.this, "OTP Resent", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(VerifyOTPActivity.this, "🔁 OTP Resent", Toast.LENGTH_SHORT).show();
+                        Log.d("OTP_Debug", "✔ OTP Code Resent!");
                     }
                 }
         );
@@ -127,19 +160,16 @@ public class VerifyOTPActivity extends AppCompatActivity {
         }
 
         @Override
-        public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-        }
+        public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
 
         @Override
         public void onTextChanged(CharSequence s, int start, int before, int count) {
-            if (!s.toString().trim().isEmpty()) {
+            if (!s.toString().trim().isEmpty() && nextField != null) {
                 nextField.requestFocus();
             }
         }
 
         @Override
-        public void afterTextChanged(Editable s) {
-        }
+        public void afterTextChanged(Editable s) {}
     }
 }
-

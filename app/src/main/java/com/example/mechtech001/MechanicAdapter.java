@@ -1,46 +1,31 @@
 package com.example.mechtech001;
 
+import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
-import androidx.recyclerview.widget.RecyclerView;
+import java.util.List;
 
-import java.util.ArrayList;
+public class MechanicAdapter extends ArrayAdapter<String> {
 
-public class MechanicAdapter extends RecyclerView.Adapter<MechanicAdapter.MechanicViewHolder> {
-
-    private ArrayList<String> mechanicsList;
-
-    public MechanicAdapter(ArrayList<String> mechanicsList) {
-        this.mechanicsList = mechanicsList;
+    public MechanicAdapter(Context context, List<String> requests) {
+        super(context, R.layout.request_item, requests);
     }
 
     @Override
-    public MechanicViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        View itemView = LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.item_mechanic, parent, false);
-        return new MechanicViewHolder(itemView);
-    }
-
-    @Override
-    public void onBindViewHolder(MechanicViewHolder holder, int position) {
-        holder.mechanicName.setText(mechanicsList.get(position));
-    }
-
-    @Override
-    public int getItemCount() {
-        return mechanicsList.size();
-    }
-
-    public class MechanicViewHolder extends RecyclerView.ViewHolder {
-        public TextView mechanicName;
-
-        public MechanicViewHolder(View view) {
-            super(view);
-            mechanicName = view.findViewById(R.id.txtMechanicName);
+    public View getView(int position, View convertView, ViewGroup parent) {
+        if (convertView == null) {
+            convertView = LayoutInflater.from(getContext()).inflate(R.layout.request_item, parent, false);
         }
+
+        String clientId = getItem(position);
+        TextView requestText = convertView.findViewById(R.id.requestText);
+        requestText.setText("Client: " + clientId);
+
+        return convertView;
     }
 }
 
