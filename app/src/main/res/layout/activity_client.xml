@@ -23,6 +23,13 @@
             android:layout_height="wrap_content"
             android:background="@android:color/white"
             android:padding="10dp" />
+        <ListView
+            android:id="@+id/MechanicListView"
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:background="@android:color/white"
+            android:divider="@android:color/darker_gray"
+            android:dividerHeight="1dp" />
 
         <Button
             android:id="@+id/requestButton"

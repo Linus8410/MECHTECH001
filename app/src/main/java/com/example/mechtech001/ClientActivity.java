@@ -5,7 +5,7 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.widget.Button;
-import android.widget.Spinner;
+import android.widget.ListView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -20,78 +20,100 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 
 public class ClientActivity extends FragmentActivity implements OnMapReadyCallback {
 
     private GoogleMap mMap;
     private FusedLocationProviderClient fusedLocationProviderClient;
-    private Location currentLocation;
-    private DatabaseReference requestsRef;
-    private String clientId = "client123"; // Unique client ID (could be dynamic in a real app)
-    private Spinner mechanicSpinner;
+    private DatabaseReference requestsRef, mechanicsRef;
+    private String clientId = "client123";
     private Button requestButton;
+    private ListView mechanicListView;
+    private ArrayList<String> mechanicList;
+    private MechanicAdapter mechanicAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_client);
 
-        mechanicSpinner = findViewById(R.id.mechanicSpinner);
         requestButton = findViewById(R.id.requestButton);
+        mechanicListView = findViewById(R.id.MechanicListView);
 
-        requestsRef = FirebaseDatabase.getInstance().getReference("requests");
         fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
+        requestsRef = FirebaseDatabase.getInstance().getReference("requests");
+        mechanicsRef = FirebaseDatabase.getInstance().getReference("mechanics");
+
+        mechanicList = new ArrayList<>();
+        mechanicAdapter = new MechanicAdapter(this, mechanicList);
+        mechanicListView.setAdapter(mechanicAdapter);
 
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
 
-        requestButton.setOnClickListener(view -> {
-            String selectedMechanic = mechanicSpinner.getSelectedItem().toString();
-            requestMechanic(selectedMechanic);
-        });
-
-        fetchLocation();
+        requestButton.setOnClickListener(view -> requestMechanic());
     }
 
-    private void fetchLocation() {
+    private void requestMechanic() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1001);
             return;
         }
+
         fusedLocationProviderClient.getLastLocation().addOnSuccessListener(location -> {
             if (location != null) {
-                currentLocation = location;
-                LatLng userLatLng = new LatLng(location.getLatitude(), location.getLongitude());
-                mMap.addMarker(new MarkerOptions().position(userLatLng).title("You"));
-                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(userLatLng, 15));
+                double latitude = location.getLatitude();
+                double longitude = location.getLongitude();
+
+                requestsRef.child(clientId).setValue(new Request(clientId, latitude, longitude, "pending"))
+                        .addOnSuccessListener(aVoid -> {
+                            Toast.makeText(ClientActivity.this, "Request sent!", Toast.LENGTH_SHORT).show();
+                            fetchNearestMechanics(latitude, longitude);
+                        })
+                        .addOnFailureListener(e -> Toast.makeText(ClientActivity.this, "Failed to send request", Toast.LENGTH_SHORT).show());
             }
         });
     }
 
-    private void requestMechanic(String mechanicName) {
-        if (currentLocation == null) {
-            Toast.makeText(this, "Location not available", Toast.LENGTH_SHORT).show();
-            return;
-        }
+    private void fetchNearestMechanics(double clientLat, double clientLon) {
+        mechanicsRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                mechanicList.clear();
+                mMap.clear();
 
-        double latitude = currentLocation.getLatitude();
-        double longitude = currentLocation.getLongitude();
+                for (DataSnapshot mechanicSnapshot : snapshot.getChildren()) {
+                    String name = mechanicSnapshot.child("name").getValue(String.class);
+                    double latitude = mechanicSnapshot.child("latitude").getValue(Double.class);
+                    double longitude = mechanicSnapshot.child("longitude").getValue(Double.class);
 
-        HashMap<String, Object> requestData = new HashMap<>();
-        requestData.put("mechanicName", mechanicName);
-        requestData.put("clientLatitude", latitude);
-        requestData.put("clientLongitude", longitude);
-        requestData.put("status", "pending");
+                    float[] results = new float[1];
+                    Location.distanceBetween(clientLat, clientLon, latitude, longitude, results);
+                    float distanceInMeters = results[0];
 
-        requestsRef.child(clientId).setValue(requestData)
-                .addOnSuccessListener(aVoid -> Toast.makeText(this, "Request sent to " + mechanicName, Toast.LENGTH_SHORT).show())
-                .addOnFailureListener(e -> Toast.makeText(this, "Request failed", Toast.LENGTH_SHORT).show());
+                    if (distanceInMeters <= 5000) { // Mechanics within 5 km
+                        mechanicList.add(name + " (" + distanceInMeters / 1000 + " km away)");
+                        LatLng mechanicLocation = new LatLng(latitude, longitude);
+                        mMap.addMarker(new MarkerOptions().position(mechanicLocation).title(name));
+                    }
+                }
+                mechanicAdapter.notifyDataSetChanged();
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Toast.makeText(ClientActivity.this, "Error loading mechanics", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     @Override

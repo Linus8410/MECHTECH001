@@ -1,20 +1,31 @@
 package com.example.mechtech001;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.location.Location;
 import android.os.Bundle;
-import android.view.View;
 import android.widget.Button;
 import android.widget.ListView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
@@ -31,7 +42,10 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
     private ArrayList<String> requestList;
     private MechanicAdapter adapter;
     private Button refreshButton;
-    private String mechanicId = "mechanic123"; // Unique mechanic ID (could be dynamic in a real app)
+    private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
+
+    private FusedLocationProviderClient fusedLocationClient;
+    private LocationCallback locationCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,6 +60,7 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
         requestListView.setAdapter(adapter);
 
         requestsRef = FirebaseDatabase.getInstance().getReference("requests");
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         if (mapFragment != null) {
@@ -53,6 +68,7 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
         }
 
         fetchClientRequests();
+        listenForRequests();  // Listen for new requests in real-time
 
         refreshButton.setOnClickListener(view -> fetchClientRequests());
 
@@ -60,14 +76,76 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
             String clientId = requestList.get(position);
             acceptRequest(clientId);
         });
+
+        if (checkLocationPermission()) {
+            requestLocationUpdates();
+        } else {
+            requestLocationPermission();
+        }
+    }
+
+    private boolean checkLocationPermission() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestLocationPermission() {
+        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                requestLocationUpdates();
+            } else {
+                Toast.makeText(this, "Location permission denied", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private void requestLocationUpdates() {
+        LocationRequest locationRequest = LocationRequest.create();
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        locationRequest.setInterval(10000);
+        locationRequest.setFastestInterval(5000);
+
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                if (locationResult == null) {
+                    return;
+                }
+                for (Location location : locationResult.getLocations()) {
+                    updateMapWithCurrentLocation(location);
+                }
+            }
+        };
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null);
+        }
+    }
+
+    private void updateMapWithCurrentLocation(Location location) {
+        if (mMap != null && location != null) {
+            LatLng currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
+            mMap.clear();
+            mMap.addMarker(new MarkerOptions().position(currentLocation).title("Your Location"));
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+        } else {
+            Toast.makeText(this, "Unable to fetch location", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void fetchClientRequests() {
-        requestsRef.addValueEventListener(new ValueEventListener() {
+        requestsRef.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 requestList.clear();
-                mMap.clear();
+                if (mMap != null) {
+                    mMap.clear();
+                }
 
                 for (DataSnapshot requestSnapshot : snapshot.getChildren()) {
                     String clientId = requestSnapshot.getKey();
@@ -77,10 +155,12 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
 
                     if (latitude != null && longitude != null) {
                         LatLng clientLocation = new LatLng(latitude, longitude);
-                        mMap.addMarker(new MarkerOptions().position(clientLocation).title("Client: " + clientId));
+                        if (mMap != null) {
+                            mMap.addMarker(new MarkerOptions().position(clientLocation).title("Client: " + clientId));
+                        }
                     }
 
-                    if (status != null && status.equals("pending")) {
+                    if ("pending".equals(status)) {
                         requestList.add(clientId);
                     }
                 }
@@ -107,10 +187,55 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
         requestsRef.child(clientId).child("message").setValue("Mechanic is on the way!");
     }
 
+    private void listenForRequests() {
+        requestsRef.addChildEventListener(new ChildEventListener() {
+            @Override
+            public void onChildAdded(@NonNull DataSnapshot snapshot, String previousChildName) {
+                String clientId = snapshot.getKey();
+                Toast.makeText(Mechanic.this, "New request from " + clientId, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onChildChanged(@NonNull DataSnapshot snapshot, String previousChildName) {}
+
+            @Override
+            public void onChildRemoved(@NonNull DataSnapshot snapshot) {}
+
+            @Override
+            public void onChildMoved(@NonNull DataSnapshot snapshot, String previousChildName) {}
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        });
+    }
+
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
-        LatLng defaultLocation = new LatLng(37.7749, -122.4194); // Default location (San Francisco)
+
+        if (checkLocationPermission()) {
+            fusedLocationClient.getLastLocation()
+                    .addOnSuccessListener(this, location -> {
+                        if (location != null) {
+                            updateMapWithCurrentLocation(location);
+                        } else {
+                            Toast.makeText(Mechanic.this, "Unable to fetch last known location", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+        } else {
+            requestLocationPermission();
+        }
+
+        LatLng defaultLocation = new LatLng(37.7749, -122.4194);
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 10));
     }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (fusedLocationClient != null && locationCallback != null) {
+            fusedLocationClient.removeLocationUpdates(locationCallback);
+        }
+    }
 }
+
