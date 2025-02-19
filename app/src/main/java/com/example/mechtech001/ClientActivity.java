@@ -1,9 +1,11 @@
 package com.example.mechtech001;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.widget.Button;
 import android.widget.ListView;
 import android.widget.Toast;
@@ -69,7 +71,7 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
             return;
         }
 
-        fusedLocationProviderClient.getLastLocation().addOnSuccessListener(location -> {
+        fusedLocationProviderClient.getCurrentLocation(100, null).addOnSuccessListener(location -> {
             if (location != null) {
                 double latitude = location.getLatitude();
                 double longitude = location.getLongitude();
@@ -80,6 +82,8 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
                             fetchNearestMechanics(latitude, longitude);
                         })
                         .addOnFailureListener(e -> Toast.makeText(ClientActivity.this, "Failed to send request", Toast.LENGTH_SHORT).show());
+            } else {
+                Toast.makeText(ClientActivity.this, "Unable to fetch location", Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -93,17 +97,19 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
 
                 for (DataSnapshot mechanicSnapshot : snapshot.getChildren()) {
                     String name = mechanicSnapshot.child("name").getValue(String.class);
-                    double latitude = mechanicSnapshot.child("latitude").getValue(Double.class);
-                    double longitude = mechanicSnapshot.child("longitude").getValue(Double.class);
+                    Double latitude = mechanicSnapshot.child("latitude").getValue(Double.class);
+                    Double longitude = mechanicSnapshot.child("longitude").getValue(Double.class);
 
-                    float[] results = new float[1];
-                    Location.distanceBetween(clientLat, clientLon, latitude, longitude, results);
-                    float distanceInMeters = results[0];
+                    if (latitude != null && longitude != null) {
+                        float[] results = new float[1];
+                        Location.distanceBetween(clientLat, clientLon, latitude, longitude, results);
+                        float distanceInMeters = results[0];
 
-                    if (distanceInMeters <= 5000) { // Mechanics within 5 km
-                        mechanicList.add(name + " (" + distanceInMeters / 1000 + " km away)");
-                        LatLng mechanicLocation = new LatLng(latitude, longitude);
-                        mMap.addMarker(new MarkerOptions().position(mechanicLocation).title(name));
+                        if (distanceInMeters <= 5000) { // Mechanics within 5 km
+                            mechanicList.add(name + " (" + distanceInMeters / 1000 + " km away)");
+                            LatLng mechanicLocation = new LatLng(latitude, longitude);
+                            mMap.addMarker(new MarkerOptions().position(mechanicLocation).title(name));
+                        }
                     }
                 }
                 mechanicAdapter.notifyDataSetChanged();
@@ -119,5 +125,49 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
+        enableMyLocation();
+    }
+
+    private void enableMyLocation() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1001);
+            return;
+        }
+
+        mMap.setMyLocationEnabled(true);
+        getCurrentLocation();
+    }
+
+    private void getCurrentLocation() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1001);
+            return;
+        }
+
+        fusedLocationProviderClient.getCurrentLocation(100, null).addOnSuccessListener(location -> {
+            if (location != null) {
+                double latitude = location.getLatitude();
+                double longitude = location.getLongitude();
+                LatLng clientLocation = new LatLng(latitude, longitude);
+
+                mMap.clear();
+                mMap.addMarker(new MarkerOptions().position(clientLocation).title("Your Location"));
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(clientLocation, 15));
+            } else {
+                Toast.makeText(ClientActivity.this, "Unable to fetch location", Toast.LENGTH_SHORT).show();
+            }
+        }).addOnFailureListener(e -> Toast.makeText(ClientActivity.this, "Failed to get location", Toast.LENGTH_SHORT).show());
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1001) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                enableMyLocation();
+            } else {
+                Toast.makeText(this, "Location permission denied", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 }

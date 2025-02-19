@@ -12,14 +12,15 @@ import java.util.List;
 public class ClientRequestAdapter extends RecyclerView.Adapter<ClientRequestAdapter.ViewHolder> {
 
     private List<String> requestList;
-    private OnRequestAcceptListener listener;
+    private OnRequestActionListener listener;
 
     // Interface for callback
-    public interface OnRequestAcceptListener {
+    public interface OnRequestActionListener {
         void onRequestAccept(String clientId);
+        void onRequestDecline(String clientId);
     }
 
-    public ClientRequestAdapter(List<String> requestList, OnRequestAcceptListener listener) {
+    public ClientRequestAdapter(List<String> requestList, OnRequestActionListener listener) {
         this.requestList = requestList;
         this.listener = listener;
     }
@@ -35,11 +36,17 @@ public class ClientRequestAdapter extends RecyclerView.Adapter<ClientRequestAdap
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         String clientId = requestList.get(position);
-        holder.clientNameTextView.setText(clientId);
+        holder.clientNameTextView.setText("Client: " + clientId);
 
         holder.acceptButton.setOnClickListener(v -> {
             if (listener != null) {
                 listener.onRequestAccept(clientId);
+            }
+        });
+
+        holder.declineButton.setOnClickListener(v -> {
+            if (listener != null) {
+                listener.onRequestDecline(clientId);
             }
         });
     }
@@ -51,12 +58,14 @@ public class ClientRequestAdapter extends RecyclerView.Adapter<ClientRequestAdap
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
         TextView clientNameTextView;
-        Button acceptButton;
+        Button acceptButton, declineButton;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
-            clientNameTextView = itemView.findViewById(R.id.clientRequestText);
-            acceptButton = itemView.findViewById(R.id.btnAccept);
+            clientNameTextView = itemView.findViewById(R.id.requestText);
+            acceptButton = itemView.findViewById(R.id.acceptButton);
+            declineButton = itemView.findViewById(R.id.declineButton);
         }
     }
 }
+

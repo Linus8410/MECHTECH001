@@ -7,16 +7,13 @@ import android.os.Bundle;
 import android.widget.Button;
 import android.widget.ListView;
 import android.widget.Toast;
-
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationCallback;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -24,13 +21,7 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.tasks.OnSuccessListener;
-import com.google.firebase.database.ChildEventListener;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
-import com.google.firebase.database.DatabaseReference;
-import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.database.*;
 
 import java.util.ArrayList;
 
@@ -45,38 +36,89 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
 
     private FusedLocationProviderClient fusedLocationClient;
-    private LocationCallback locationCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_mechanic);
 
+        initializeUI();
+        initializeFirebase();
+        initializeMap();
+        setListeners();
+        checkAndRequestLocationPermission();
+    }
+
+    private void initializeUI() {
         requestListView = findViewById(R.id.requestListView);
         refreshButton = findViewById(R.id.refreshButton);
-
         requestList = new ArrayList<>();
         adapter = new MechanicAdapter(this, requestList);
         requestListView.setAdapter(adapter);
+    }
 
+    private void initializeFirebase() {
         requestsRef = FirebaseDatabase.getInstance().getReference("requests");
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
+        // 🔥 Listen for real-time updates 🔥
+        requestsRef.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                requestList.clear();
+                if (mMap != null) mMap.clear();
+
+                for (DataSnapshot requestSnapshot : snapshot.getChildren()) {
+                    String clientId = requestSnapshot.getKey();
+                    Double latitude = requestSnapshot.child("clientLatitude").getValue(Double.class);
+                    Double longitude = requestSnapshot.child("clientLongitude").getValue(Double.class);
+                    String status = requestSnapshot.child("status").getValue(String.class);
+
+                    if (latitude != null && longitude != null) {
+                        LatLng clientLocation = new LatLng(latitude, longitude);
+                        if (mMap != null) {
+                            mMap.addMarker(new MarkerOptions().position(clientLocation).title("Client: " + clientId));
+                        }
+                    }
+
+                    if ("pending".equals(status)) {
+                        requestList.add(clientId);
+                    }
+                }
+                adapter.notifyDataSetChanged();
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Toast.makeText(Mechanic.this, "Failed to load requests", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void initializeMap() {
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
+    }
 
-        fetchClientRequests();
-        listenForRequests();  // Listen for new requests in real-time
-
+    private void setListeners() {
         refreshButton.setOnClickListener(view -> fetchClientRequests());
 
         requestListView.setOnItemClickListener((parent, view, position, id) -> {
             String clientId = requestList.get(position);
-            acceptRequest(clientId);
-        });
 
+            new AlertDialog.Builder(Mechanic.this)
+                    .setTitle("Request Action")
+                    .setMessage("Do you want to accept or decline this request?")
+                    .setPositiveButton("Accept", (dialog, which) -> acceptRequest(clientId))
+                    .setNegativeButton("Decline", (dialog, which) -> declineRequest(clientId))
+                    .setNeutralButton("Cancel", null)
+                    .show();
+        });
+    }
+
+    private void checkAndRequestLocationPermission() {
         if (checkLocationPermission()) {
             requestLocationUpdates();
         } else {
@@ -92,50 +134,20 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                requestLocationUpdates();
-            } else {
-                Toast.makeText(this, "Location permission denied", Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
-
     private void requestLocationUpdates() {
-        LocationRequest locationRequest = LocationRequest.create();
-        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        locationRequest.setInterval(10000);
-        locationRequest.setFastestInterval(5000);
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestLocationPermission();
+            return;
+        }
 
-        locationCallback = new LocationCallback() {
-            @Override
-            public void onLocationResult(LocationResult locationResult) {
-                if (locationResult == null) {
-                    return;
-                }
-                for (Location location : locationResult.getLocations()) {
-                    updateMapWithCurrentLocation(location);
-                }
+        fusedLocationClient.getLastLocation().addOnSuccessListener(this, location -> {
+            if (location != null) {
+                updateMapWithCurrentLocation(location);
+            } else {
+                Toast.makeText(Mechanic.this, "Failed to get location. Try again.", Toast.LENGTH_SHORT).show();
             }
-        };
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null);
-        }
-    }
-
-    private void updateMapWithCurrentLocation(Location location) {
-        if (mMap != null && location != null) {
-            LatLng currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
-            mMap.clear();
-            mMap.addMarker(new MarkerOptions().position(currentLocation).title("Your Location"));
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
-        } else {
-            Toast.makeText(this, "Unable to fetch location", Toast.LENGTH_SHORT).show();
-        }
+        });
     }
 
     private void fetchClientRequests() {
@@ -143,9 +155,7 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 requestList.clear();
-                if (mMap != null) {
-                    mMap.clear();
-                }
+                if (mMap != null) mMap.clear();
 
                 for (DataSnapshot requestSnapshot : snapshot.getChildren()) {
                     String clientId = requestSnapshot.getKey();
@@ -177,65 +187,43 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
     private void acceptRequest(String clientId) {
         requestsRef.child(clientId).child("status").setValue("accepted")
                 .addOnSuccessListener(aVoid -> {
+                    notifyClient(clientId, "Mechanic is on the way!");
                     Toast.makeText(Mechanic.this, "Request Accepted!", Toast.LENGTH_SHORT).show();
-                    notifyClient(clientId);
                 })
                 .addOnFailureListener(e -> Toast.makeText(Mechanic.this, "Failed to accept request", Toast.LENGTH_SHORT).show());
     }
 
-    private void notifyClient(String clientId) {
-        requestsRef.child(clientId).child("message").setValue("Mechanic is on the way!");
+    private void declineRequest(String clientId) {
+        requestsRef.child(clientId).child("status").setValue("declined")
+                .addOnSuccessListener(aVoid -> {
+                    notifyClient(clientId, "Mechanic is unavailable. Please request again later.");
+                    Toast.makeText(Mechanic.this, "Request Declined!", Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> Toast.makeText(Mechanic.this, "Failed to decline request", Toast.LENGTH_SHORT).show());
     }
 
-    private void listenForRequests() {
-        requestsRef.addChildEventListener(new ChildEventListener() {
-            @Override
-            public void onChildAdded(@NonNull DataSnapshot snapshot, String previousChildName) {
-                String clientId = snapshot.getKey();
-                Toast.makeText(Mechanic.this, "New request from " + clientId, Toast.LENGTH_SHORT).show();
-            }
-
-            @Override
-            public void onChildChanged(@NonNull DataSnapshot snapshot, String previousChildName) {}
-
-            @Override
-            public void onChildRemoved(@NonNull DataSnapshot snapshot) {}
-
-            @Override
-            public void onChildMoved(@NonNull DataSnapshot snapshot, String previousChildName) {}
-
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {}
-        });
+    private void notifyClient(String clientId, String message) {
+        requestsRef.child(clientId).child("message").setValue(message);
     }
 
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
-
         if (checkLocationPermission()) {
-            fusedLocationClient.getLastLocation()
-                    .addOnSuccessListener(this, location -> {
-                        if (location != null) {
-                            updateMapWithCurrentLocation(location);
-                        } else {
-                            Toast.makeText(Mechanic.this, "Unable to fetch last known location", Toast.LENGTH_SHORT).show();
-                        }
-                    });
+            requestLocationUpdates();
         } else {
             requestLocationPermission();
         }
-
-        LatLng defaultLocation = new LatLng(37.7749, -122.4194);
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 10));
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(37.7749, -122.4194), 10));
     }
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (fusedLocationClient != null && locationCallback != null) {
-            fusedLocationClient.removeLocationUpdates(locationCallback);
+    private void updateMapWithCurrentLocation(Location location) {
+        LatLng mechanicLocation = new LatLng(location.getLatitude(), location.getLongitude());
+
+        if (mMap != null) {
+            mMap.clear();
+            mMap.addMarker(new MarkerOptions().position(mechanicLocation).title("Your Location"));
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(mechanicLocation, 15));
         }
     }
 }
-
