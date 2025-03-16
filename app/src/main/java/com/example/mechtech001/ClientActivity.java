@@ -1,11 +1,10 @@
 package com.example.mechtech001;
 
 import android.Manifest;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
-import android.provider.Settings;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.ListView;
 import android.widget.Toast;
@@ -71,17 +70,22 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
             return;
         }
 
-        fusedLocationProviderClient.getCurrentLocation(100, null).addOnSuccessListener(location -> {
+        fusedLocationProviderClient.getLastLocation().addOnSuccessListener(location -> {
             if (location != null) {
                 double latitude = location.getLatitude();
                 double longitude = location.getLongitude();
 
+                // Save the request to Firebase
                 requestsRef.child(clientId).setValue(new Request(clientId, latitude, longitude, "pending"))
                         .addOnSuccessListener(aVoid -> {
+                            Log.d("Firebase", "Request saved successfully: " + clientId);
                             Toast.makeText(ClientActivity.this, "Request sent!", Toast.LENGTH_SHORT).show();
                             fetchNearestMechanics(latitude, longitude);
                         })
-                        .addOnFailureListener(e -> Toast.makeText(ClientActivity.this, "Failed to send request", Toast.LENGTH_SHORT).show());
+                        .addOnFailureListener(e -> {
+                            Log.e("Firebase", "Failed to save request: " + e.getMessage());
+                            Toast.makeText(ClientActivity.this, "Failed to send request", Toast.LENGTH_SHORT).show();
+                        });
             } else {
                 Toast.makeText(ClientActivity.this, "Unable to fetch location", Toast.LENGTH_SHORT).show();
             }
@@ -105,13 +109,18 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
                         Location.distanceBetween(clientLat, clientLon, latitude, longitude, results);
                         float distanceInMeters = results[0];
 
-                        if (distanceInMeters <= 5000) { // Mechanics within 5 km
+                        if (distanceInMeters <= 5000) { // 5 km radius
                             mechanicList.add(name + " (" + distanceInMeters / 1000 + " km away)");
                             LatLng mechanicLocation = new LatLng(latitude, longitude);
                             mMap.addMarker(new MarkerOptions().position(mechanicLocation).title(name));
                         }
                     }
                 }
+
+                if (mechanicList.isEmpty()) {
+                    mechanicList.add("No mechanics available within 5 km.");
+                }
+
                 mechanicAdapter.notifyDataSetChanged();
             }
 
@@ -144,7 +153,7 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
             return;
         }
 
-        fusedLocationProviderClient.getCurrentLocation(100, null).addOnSuccessListener(location -> {
+        fusedLocationProviderClient.getLastLocation().addOnSuccessListener(location -> {
             if (location != null) {
                 double latitude = location.getLatitude();
                 double longitude = location.getLongitude();
