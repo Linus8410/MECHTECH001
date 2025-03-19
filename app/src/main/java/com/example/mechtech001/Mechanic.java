@@ -1,10 +1,14 @@
 package com.example.mechtech001;
 
 import android.Manifest;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
 import android.widget.Button;
 import android.widget.ListView;
 import android.widget.Toast;
@@ -99,6 +103,9 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
                         LatLng clientLocation = new LatLng(latitude, longitude);
                         mMap.addMarker(new MarkerOptions().position(clientLocation).title("Client: " + clientId));
                         requestList.add("Client Request from: " + clientId);
+
+                        // Show dialog for new requests
+                        showRequestDialog(clientId);
                     }
                 }
 
@@ -114,6 +121,93 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
                 Toast.makeText(Mechanic.this, "Error loading requests: " + error.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    private void showRequestDialog(String clientId) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("New Request");
+        builder.setMessage("You have a new request from Client: " + clientId);
+
+        // Inflate the custom layout for the dialog
+        LayoutInflater inflater = LayoutInflater.from(this);
+        View dialogView = inflater.inflate(R.layout.dialog_accept_decline, null);
+        builder.setView(dialogView);
+
+        // Initialize buttons
+        Button acceptButton = dialogView.findViewById(R.id.acceptButton);
+        Button declineButton = dialogView.findViewById(R.id.declineButton);
+
+        // Create the dialog
+        AlertDialog dialog = builder.create();
+
+        // Handle Accept button click
+        acceptButton.setOnClickListener(v -> {
+            acceptRequest(clientId);
+            dialog.dismiss();
+        });
+
+        // Handle Decline button click
+        declineButton.setOnClickListener(v -> {
+            declineRequest(clientId);
+            dialog.dismiss();
+        });
+
+        // Show the dialog
+        dialog.show();
+    }
+
+    private void acceptRequest(String clientId) {
+        // Update the request status to "accepted"
+        requestsRef.child(clientId).child("status").setValue("accepted")
+                .addOnSuccessListener(aVoid -> {
+                    // Start sharing the mechanic's location
+                    startSharingLocation("mechanicId"); // Replace with actual mechanic ID
+                    Toast.makeText(Mechanic.this, "Request accepted!", Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(Mechanic.this, "Failed to accept request", Toast.LENGTH_SHORT).show();
+                });
+    }
+
+    private void declineRequest(String clientId) {
+        // Update the request status to "declined"
+        requestsRef.child(clientId).child("status").setValue("declined")
+                .addOnSuccessListener(aVoid -> {
+                    Toast.makeText(Mechanic.this, "Request declined!", Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(Mechanic.this, "Failed to decline request", Toast.LENGTH_SHORT).show();
+                });
+    }
+
+    private void startSharingLocation(String mechanicId) {
+        if (checkLocationPermission()) {
+            LocationRequest locationRequest = LocationRequest.create()
+                    .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
+                    .setInterval(5000) // Update every 5 seconds
+                    .setFastestInterval(3000); // Fastest update interval
+
+            locationCallback = new LocationCallback() {
+                @Override
+                public void onLocationResult(LocationResult locationResult) {
+                    if (locationResult == null) {
+                        return;
+                    }
+                    for (Location location : locationResult.getLocations()) {
+                        // Update Firebase with the mechanic's location
+                        DatabaseReference mechanicLocationRef = FirebaseDatabase.getInstance()
+                                .getReference("mechanicLocations")
+                                .child(mechanicId);
+
+                        mechanicLocationRef.child("latitude").setValue(location.getLatitude());
+                        mechanicLocationRef.child("longitude").setValue(location.getLongitude());
+                        mechanicLocationRef.child("timestamp").setValue(System.currentTimeMillis());
+                    }
+                }
+            };
+
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null);
+        }
     }
 
     private void checkAndRequestLocationPermission() {

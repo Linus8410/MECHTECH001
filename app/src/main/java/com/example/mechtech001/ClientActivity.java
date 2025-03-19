@@ -81,7 +81,7 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
                         .addOnSuccessListener(aVoid -> {
                             Log.d("Firebase", "Request saved successfully: " + clientId);
                             Toast.makeText(ClientActivity.this, "Request sent!", Toast.LENGTH_SHORT).show();
-                            fetchNearestMechanics(latitude, longitude);
+                            fetchRequestStatus(clientId); // Start listening for status updates
                         })
                         .addOnFailureListener(e -> {
                             Log.e("Firebase", "Failed to save request: " + e.getMessage());
@@ -93,56 +93,66 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
         });
     }
 
-    private void fetchNearestMechanics(double clientLat, double clientLon) {
-        Log.d("FetchMechanics", "Fetching mechanics for client location: " + clientLat + ", " + clientLon);
-
-        mechanicsRef.addListenerForSingleValueEvent(new ValueEventListener() {
+    private void fetchRequestStatus(String clientId) {
+        requestsRef.child(clientId).addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
-                mechanicList.clear();
-                mMap.clear();
+                if (snapshot.exists()) {
+                    String status = snapshot.child("status").getValue(String.class);
 
-                if (!snapshot.exists()) {
-                    Log.d("FetchMechanics", "No mechanics found in Firebase.");
-                    mechanicList.add("No mechanics available.");
-                    mechanicAdapter.notifyDataSetChanged();
-                    return;
-                }
-
-                for (DataSnapshot mechanicSnapshot : snapshot.getChildren()) {
-                    String name = mechanicSnapshot.child("name").getValue(String.class);
-                    Double latitude = mechanicSnapshot.child("latitude").getValue(Double.class);
-                    Double longitude = mechanicSnapshot.child("longitude").getValue(Double.class);
-                    String status = mechanicSnapshot.child("status").getValue(String.class);
-
-                    if (latitude != null && longitude != null && "available".equals(status)) {
-                        Log.d("FetchMechanics", "Mechanic: " + name + ", Latitude: " + latitude + ", Longitude: " + longitude);
-
-                        float[] results = new float[1];
-                        Location.distanceBetween(clientLat, clientLon, latitude, longitude, results);
-                        float distanceInMeters = results[0];
-
-                        if (distanceInMeters <= 10000) { // 10 km radius
-                            mechanicList.add(name + " (" + distanceInMeters / 1000 + " km away)");
-                            LatLng mechanicLocation = new LatLng(latitude, longitude);
-                            mMap.addMarker(new MarkerOptions().position(mechanicLocation).title(name));
+                    if ("accepted".equals(status)) {
+                        // Mechanic accepted the request
+                        Toast.makeText(ClientActivity.this, "Mechanic is on the way!", Toast.LENGTH_SHORT).show();
+                        String mechanicId = snapshot.child("mechanicId").getValue(String.class);
+                        if (mechanicId != null) {
+                            trackMechanicMovement(mechanicId); // Track mechanic's movement
                         }
+                    } else if ("declined".equals(status)) {
+                        // Mechanic declined the request
+                        Toast.makeText(ClientActivity.this, "Request declined. Find another alternative.", Toast.LENGTH_SHORT).show();
                     }
                 }
-
-                if (mechanicList.isEmpty()) {
-                    mechanicList.add("No mechanics available within 10 km.");
-                }
-
-                mechanicAdapter.notifyDataSetChanged();
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError error) {
-                Log.e("FetchMechanics", "Error loading mechanics: " + error.getMessage());
-                Toast.makeText(ClientActivity.this, "Error loading mechanics", Toast.LENGTH_SHORT).show();
+                Toast.makeText(ClientActivity.this, "Failed to fetch request status: " + error.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    private void trackMechanicMovement(String mechanicId) {
+        DatabaseReference mechanicLocationRef = FirebaseDatabase.getInstance()
+                .getReference("mechanicLocations")
+                .child(mechanicId);
+
+        mechanicLocationRef.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (snapshot.exists()) {
+                    Double latitude = snapshot.child("latitude").getValue(Double.class);
+                    Double longitude = snapshot.child("longitude").getValue(Double.class);
+
+                    if (latitude != null && longitude != null) {
+                        LatLng mechanicLocation = new LatLng(latitude, longitude);
+                        updateMechanicLocationOnMap(mechanicLocation);
+                    }
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Toast.makeText(ClientActivity.this, "Failed to track mechanic: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void updateMechanicLocationOnMap(LatLng mechanicLocation) {
+        if (mMap != null) {
+            mMap.clear(); // Clear previous markers
+            mMap.addMarker(new MarkerOptions().position(mechanicLocation).title("Mechanic Location"));
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(mechanicLocation, 15));
+        }
     }
 
     @Override
