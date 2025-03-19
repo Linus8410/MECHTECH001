@@ -34,7 +34,7 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
     private GoogleMap mMap;
     private FusedLocationProviderClient fusedLocationProviderClient;
     private DatabaseReference requestsRef, mechanicsRef;
-    private String clientId = "client123";
+    private String clientId = "client123"; // Replace with dynamic client ID if needed
     private Button requestButton;
     private ListView mechanicListView;
     private ArrayList<String> mechanicList;
@@ -74,6 +74,7 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
             if (location != null) {
                 double latitude = location.getLatitude();
                 double longitude = location.getLongitude();
+                Log.d("ClientLocation", "Client Latitude: " + latitude + ", Longitude: " + longitude);
 
                 // Save the request to Firebase
                 requestsRef.child(clientId).setValue(new Request(clientId, latitude, longitude, "pending"))
@@ -93,23 +94,35 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
     }
 
     private void fetchNearestMechanics(double clientLat, double clientLon) {
+        Log.d("FetchMechanics", "Fetching mechanics for client location: " + clientLat + ", " + clientLon);
+
         mechanicsRef.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 mechanicList.clear();
                 mMap.clear();
 
+                if (!snapshot.exists()) {
+                    Log.d("FetchMechanics", "No mechanics found in Firebase.");
+                    mechanicList.add("No mechanics available.");
+                    mechanicAdapter.notifyDataSetChanged();
+                    return;
+                }
+
                 for (DataSnapshot mechanicSnapshot : snapshot.getChildren()) {
                     String name = mechanicSnapshot.child("name").getValue(String.class);
                     Double latitude = mechanicSnapshot.child("latitude").getValue(Double.class);
                     Double longitude = mechanicSnapshot.child("longitude").getValue(Double.class);
+                    String status = mechanicSnapshot.child("status").getValue(String.class);
 
-                    if (latitude != null && longitude != null) {
+                    if (latitude != null && longitude != null && "available".equals(status)) {
+                        Log.d("FetchMechanics", "Mechanic: " + name + ", Latitude: " + latitude + ", Longitude: " + longitude);
+
                         float[] results = new float[1];
                         Location.distanceBetween(clientLat, clientLon, latitude, longitude, results);
                         float distanceInMeters = results[0];
 
-                        if (distanceInMeters <= 5000) { // 5 km radius
+                        if (distanceInMeters <= 10000) { // 10 km radius
                             mechanicList.add(name + " (" + distanceInMeters / 1000 + " km away)");
                             LatLng mechanicLocation = new LatLng(latitude, longitude);
                             mMap.addMarker(new MarkerOptions().position(mechanicLocation).title(name));
@@ -118,7 +131,7 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
                 }
 
                 if (mechanicList.isEmpty()) {
-                    mechanicList.add("No mechanics available within 5 km.");
+                    mechanicList.add("No mechanics available within 10 km.");
                 }
 
                 mechanicAdapter.notifyDataSetChanged();
@@ -126,6 +139,7 @@ public class ClientActivity extends FragmentActivity implements OnMapReadyCallba
 
             @Override
             public void onCancelled(@NonNull DatabaseError error) {
+                Log.e("FetchMechanics", "Error loading mechanics: " + error.getMessage());
                 Toast.makeText(ClientActivity.this, "Error loading mechanics", Toast.LENGTH_SHORT).show();
             }
         });

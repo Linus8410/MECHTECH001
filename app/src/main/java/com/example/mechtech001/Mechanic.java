@@ -92,8 +92,8 @@ public class Mechanic extends FragmentActivity implements OnMapReadyCallback {
 
                 for (DataSnapshot requestSnapshot : snapshot.getChildren()) {
                     String clientId = requestSnapshot.getKey();
-                    Double latitude = requestSnapshot.child("latitude").getValue(Double.class);
-                    Double longitude = requestSnapshot.child("longitude").getValue(Double.class);
+                    Double latitude = requestSnapshot.child("clientLatitude").getValue(Double.class);
+                    Double longitude = requestSnapshot.child("clientLongitude").getValue(Double.class);
 
                     if (latitude != null && longitude != null) {
                         LatLng clientLocation = new LatLng(latitude, longitude);
