@@ -48,6 +48,10 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     implementation ("com.google.firebase:firebase-firestore:24.9.1")
 
+        implementation ("com.squareup.retrofit2:retrofit:2.9.0")
+        implementation ("com.squareup.retrofit2:converter-gson:2.9.0")
+
+
     implementation ("com.android.billingclient:billing:6.0.1")
     implementation ("androidx.browser:browser:1.3.0")
 
